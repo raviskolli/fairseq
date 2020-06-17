@@ -144,19 +144,19 @@ def get_lr(args, update_num):
         args.warmup_init_lr = 0 if args.warmup_updates > 0 else warmup_end_lr
 
     # linearly warmup for the first args.warmup_updates
-    self.lr_step = (warmup_end_lr - args.warmup_init_lr) / args.warmup_updates
+    lr_step = (warmup_end_lr - args.warmup_init_lr) / args.warmup_updates
 
     # then, decay prop. to the inverse square root of the update number
-    self.decay_factor = warmup_end_lr * args.warmup_updates**0.5
+    decay_factor = warmup_end_lr * args.warmup_updates**0.5
 
     # initial learning rate
-    self.lr = args.warmup_init_lr
+    lr = args.warmup_init_lr
     
-    if num_updates < self.args.warmup_updates:
-        self.lr = self.args.warmup_init_lr + num_updates*self.lr_step
+    if num_updates < args.warmup_updates:
+        lr = args.warmup_init_lr + num_updates*lr_step
     else:
-        self.lr = self.decay_factor * num_updates**-0.5
-    return self.lr
+        lr = decay_factor * num_updates**-0.5
+    return lr
 
 def ort_train_step(args, update_num, model, sample):
     src_tokens = sample['src_tokens']
@@ -164,6 +164,11 @@ def ort_train_step(args, update_num, model, sample):
     prev_output_tokens = sample['prev_output_tokens']
     target = sample['target']
     target = target.view(-1)
+
+    print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
+    print('ORT_TRAIN_STEP: src_lengths size: {}'.format(src_lengths.size()))
+    print('ORT_TRAIN_STEP: prev_output_tokens size: {}'.format(prev_output_tokens.size()))
+    print('ORT_TRAIN_STEP: target size: {}'.format(target.size()))
 
     lr = get_lr(args, update_num)
     learning_rate = torch.tensor([lr])

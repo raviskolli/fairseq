@@ -78,6 +78,7 @@ class ORTTrainer(object):
 
         # copy model and criterion to current device/dtype
         self._criterion = criterion
+        self._ptmodel = model
         self._model = model
         self._model = bart_model_with_loss(model, criterion)
         self._model = ort_supplement.create_ort_trainer(args, device, model)
@@ -329,7 +330,7 @@ class ORTTrainer(object):
             max_sentences=self.args.max_sentences,
             max_positions=utils.resolve_max_positions(
                 self.task.max_positions(),
-                self.model.max_positions(),
+                self._ptmodel.max_positions(),
                 self.args.max_tokens,
             ),
             ignore_invalid_inputs=True,
@@ -352,7 +353,7 @@ class ORTTrainer(object):
             max_sentences=self.args.max_sentences_valid,
             max_positions=utils.resolve_max_positions(
                 self.task.max_positions(),
-                self.model.max_positions(),
+                self._ptmodel.max_positions(),
             ),
             ignore_invalid_inputs=self.args.skip_invalid_size_inputs_valid_test,
             required_batch_size_multiple=self.args.required_batch_size_multiple,
@@ -518,7 +519,7 @@ class ORTTrainer(object):
             logging_output = self._reduce_and_log_stats(
                 logging_outputs, sample_size, grad_norm,
             )
-
+            '''
             # clear CUDA cache to reduce memory fragmentation
             if (
                 self.cuda
@@ -529,7 +530,7 @@ class ORTTrainer(object):
                 ) == 0
             ):
                 torch.cuda.empty_cache()
-
+            '''
         #if self.args.fp16:
             #metrics.log_scalar("loss_scale", self.optimizer.scaler.loss_scale, priority=700, round=0)
 
@@ -596,19 +597,21 @@ class ORTTrainer(object):
 
     def lr_step(self, epoch, val_loss=None):
         """Adjust the learning rate at the end of the epoch."""
-        self.lr_scheduler.step(epoch, val_loss)
+        #self.lr_scheduler.step(epoch, val_loss)
         # prefer updating the LR based on the number of steps
         return self.lr_step_update()
 
     def lr_step_update(self):
         """Update the learning rate after each update."""
-        new_lr = self.lr_scheduler.step_update(self.get_num_updates())
+        #new_lr = self.lr_scheduler.step_update(self.get_num_updates())
+        new_lr = ort_supplement.get_lr(self.args, self.get_num_updates())
         metrics.log_scalar("lr", new_lr, weight=0, priority=300)
         return new_lr
 
     def get_lr(self):
         """Get the current learning rate."""
-        return self.optimizer.get_lr()
+        return ort_supplement.get_lr(self.args, self.get_num_updates())
+        #return self.optimizer.get_lr()
 
     def get_model(self):
         """Get the (non-wrapped) model instance."""

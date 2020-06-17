@@ -156,8 +156,8 @@ def load_checkpoint(args, trainer, **passthrough_args):
         epoch_itr = trainer.get_train_iterator(
             epoch=1, load_dataset=True, **passthrough_args
         )
-
-    trainer.lr_step(epoch_itr.epoch)
+    #ORT edit
+    #trainer.lr_step(epoch_itr.epoch)
 
     return extra_state, epoch_itr
 
