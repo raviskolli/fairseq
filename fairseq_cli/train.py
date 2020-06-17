@@ -27,6 +27,7 @@ from fairseq import (
 from fairseq.data import iterators
 from fairseq.logging import meters, metrics, progress_bar
 from fairseq.trainer import Trainer
+from fairseq.trainer_ort import ORTTrainer
 from fairseq.model_parallel.megatron_trainer import MegatronTrainer
 
 
@@ -88,7 +89,9 @@ def main(args, init_distributed=False):
         quantizer = None
 
     # Build trainer
-    if args.model_parallel_size == 1:
+    if args.ort:
+        trainer = ORTTrainer(args, task, model, criterion)
+    elif args.model_parallel_size == 1:
         trainer = Trainer(args, task, model, criterion, quantizer)
     else:
         trainer = MegatronTrainer(args, task, model, criterion)
