@@ -67,7 +67,7 @@ def bert_model_description(args):
     src_tokens_desc = IODescription('src_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
     src_lengths_desc = IODescription('src_lengths', ['batch'], torch.int64, num_classes = args.max_tokens_valid)
     prev_output_tokens_desc = IODescription('prev_output_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
-    target_desc = IODescription('target', [args.train_batch_size, args.max_seq_length], torch.int64, num_classes = vocab_size)
+    target_desc = IODescription('target', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
 
     loss_desc = IODescription('loss', [], torch.float32)
     return ModelDescription([src_tokens_desc, src_lengths_desc, prev_output_tokens_desc, target_desc], [loss_desc])
