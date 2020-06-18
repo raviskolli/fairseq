@@ -52,8 +52,8 @@ def main(args, init_distributed=False):
         torch.cuda.set_device(args.device_id)
     np.random.seed(args.seed)
     utils.set_torch_seed(args.seed)
-    if init_distributed:
-        args.distributed_rank = distributed_utils.distributed_init(args)
+    #if init_distributed:
+        #args.distributed_rank = distributed_utils.distributed_init(args)
 
     if distributed_utils.is_master(args):
         checkpoint_utils.verify_checkpoint_directory(args.save_dir)
