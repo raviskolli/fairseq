@@ -307,7 +307,8 @@ class TransformerEncoder(FairseqEncoder):
 
     def __init__(self, args, dictionary, embed_tokens):
         super().__init__(dictionary)
-        self.register_buffer("version", torch.Tensor([3]))
+        #ORT edit
+        #self.register_buffer("version", torch.Tensor([3]))
 
         self.dropout = args.dropout
         self.encoder_layerdrop = args.encoder_layerdrop
@@ -522,7 +523,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         self.args = args
         super().__init__(dictionary)
-        self.register_buffer("version", torch.Tensor([3]))
+        #ORT edit
+        #self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
 
         self.dropout = args.dropout

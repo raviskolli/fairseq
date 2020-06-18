@@ -74,6 +74,7 @@ class FairseqDecoder(nn.Module):
 
         logits = net_output[0]
         if log_probs:
+            print('Fairseq Decoder: net_output size: {}'.format(net_output.size()))
             return utils.log_softmax(net_output, dim=-1, onnx_trace=self.onnx_trace)
             #return utils.log_softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
         else:

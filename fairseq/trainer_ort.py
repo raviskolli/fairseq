@@ -44,9 +44,11 @@ class bart_model_with_loss(torch.nn.Module):
         net_output = self.model_(src_tokens, src_lengths, prev_output_tokens, features_only=False, classification_head_name=None)
         net_out = net_output[0]
         net_out = net_out.view(-1, net_out.size(-1))
+        print('ORT Trainer net_out size: {}'.format(net_out.size()))
         lprobs = self.model_.get_normalized_probs(net_out, log_probs=True)
         #lprobs = lprobs.view(-1, lprobs.size(-1))
         loss = self.loss_fn_(lprobs, target)
+        print('ORT Trainer loss value: {}'.format(loss))
         return loss
 # ---
 
@@ -82,8 +84,8 @@ class ORTTrainer(object):
         self._criterion = criterion
         self._ptmodel = model
         self._model = model
-        self._model = bart_model_with_loss(model, criterion)
-        self._model = ort_supplement.create_ort_trainer(args, device, model)
+        self._model = bart_model_with_loss(self._model, criterion)
+        self._model = ort_supplement.create_ort_trainer(args, device, self._model)
 
         self._dummy_batch = "DUMMY"  # indicates we don't have a dummy batch at first
         self._lr_scheduler = None
@@ -403,7 +405,67 @@ class ORTTrainer(object):
 
             #for key, value in sample.items():
                 #print('Sample key: {}'.format(key))
+            '''
+            # Visualize model
+            model_desc = ort_supplement.bart_model_description(self.args)
+        
+            # example: {input0:{0:'batch'}, input1:{0:'batch'}}
+            dynamic_axes = {}
+            for input in model_desc.inputs_:
+                symbolic_axis = {}
+                for i, axis in enumerate(input.shape_):
+                    if isinstance(axis, str):
+                        symbolic_axis[i] = axis
+                if len(symbolic_axis):
+                    dynamic_axes[input.name_] = symbolic_axis
 
+            for output in model_desc.outputs_:
+                symbolic_axis = {}
+                for i, axis in enumerate(output.shape_):
+                    if isinstance(axis, str):
+                        symbolic_axis[i] = axis
+                if len(symbolic_axis):
+                    dynamic_axes[output.name_] = symbolic_axis
+
+            net_input = sample['net_input']
+            src_tokens = net_input['src_tokens']
+            src_lengths = net_input['src_lengths']
+            prev_output_tokens = net_input['prev_output_tokens']
+            target = sample['target']
+            target = target.view(-1)
+            src_tokens.cpu()
+            src_lengths.cpu()
+            prev_output_tokens.cpu()
+            target.cpu()
+            self._model.cuda()
+            input_names = [input.name_ for input in model_desc.inputs_]
+            output_names = [output.name_ for output in model_desc.outputs_]
+
+            self._model.eval()
+            with torch.no_grad():
+                sample_outputs = self._model(src_tokens, src_lengths, prev_output_tokens, target)
+            if isinstance(sample_outputs, torch.Tensor):
+                sample_outputs = [sample_outputs]
+            for sample_output, output_desc in zip(sample_outputs, model_desc.outputs_):
+                output_desc.dtype_ = sample_output.dtype
+            self._model.train()
+            import io
+            f = io.BytesIO()
+
+            # Other export options to use(this is for backward compatibility).
+            other_export_options = {}
+            other_export_options['training'] = True
+
+            torch.onnx._export(self._model, tuple([src_tokens, src_lengths, prev_output_tokens, target]), f,
+                    input_names=input_names,
+                    output_names=output_names,
+                    opset_version=12,
+                    dynamic_axes=dynamic_axes,
+                    _retain_param_name=True,
+                    example_outputs=tuple(sample_outputs),
+                    do_constant_folding=False,
+                    **other_export_options)
+            '''
             def maybe_no_sync():
                 """
                 Whenever *samples* contains more than one mini-batch, we
@@ -564,8 +626,11 @@ class ORTTrainer(object):
                 is_dummy_batch = False
 
             try:
-                _loss, sample_size, logging_output = self.task.valid_step(
-                    sample, self.model, self.criterion
+                _loss, sample_size, logging_output = ort_supplement.ort_valid_step(
+                        self.args,
+                        update_num=self.get_num_updates(),
+                        model=self.model,
+                        sample=sample,
                 )
             except RuntimeError as e:
                 if "out of memory" in str(e):

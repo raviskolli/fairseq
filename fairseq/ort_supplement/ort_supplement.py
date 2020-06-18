@@ -53,7 +53,7 @@ def setup_onnxruntime_with_mpi(args):
 
     return device
 
-def bert_model_description(args):
+def bart_model_description(args):
     vocab_size = 50349
 
     # allow variable input sizes:
@@ -122,10 +122,10 @@ def create_ort_trainer(args, device, model):
 
     # we request ORTTrainer to create a LambOptimizer with given optimizer_attributes. 
     # train_step does forward, backward, and optimize step.
-    model = ORTTrainer(model, None, bert_model_description(args), "AdamOptimizer", 
+    model = ORTTrainer(model, None, bart_model_description(args), "AdamOptimizer", 
         map_optimizer_attributes,
         IODescription('Learning_Rate', [1,], torch.float32),
-        device, postprocess_model=postprocess_model, 
+        device, #postprocess_model=postprocess_model, 
         gradient_accumulation_steps=args.update_freq[0],
         world_rank=args.distributed_rank, world_size=args.distributed_world_size,
         use_mixed_precision = True if args.fp16 else False,
@@ -197,4 +197,43 @@ def ort_train_step(args, update_num, model, sample):
     }
 
     return loss, sample_size, logging_output
- 
+
+def ort_eval_step(args, update_num, model, sample):
+    net_input = sample['net_input']
+    src_tokens = net_input['src_tokens']
+    src_lengths = net_input['src_lengths']
+    prev_output_tokens = net_input['prev_output_tokens']
+    target = sample['target']
+    target = target.view(-1)
+
+    print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
+    print('ORT_TRAIN_STEP: src_lengths size: {}'.format(src_lengths.size()))
+    print('ORT_TRAIN_STEP: prev_output_tokens size: {}'.format(prev_output_tokens.size()))
+    print('ORT_TRAIN_STEP: target size: {}'.format(target.size()))
+
+    lr = get_lr(args, update_num)
+    learning_rate = torch.tensor([lr])
+    if args.fp16:
+        loss_scale = torch.tensor([args.ort_loss_scale.loss_scale_])
+        loss = model.train_step(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, loss_scale)
+        all_finite = 1
+        if isinstance(loss, (list, tuple)):
+            assert len(loss) == 2
+            loss, all_finite = loss
+    else:
+        loss = model(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, learning_rate)
+
+    if training_steps % args.gradient_accumulation_steps == 0:
+        if args.fp16:
+            args.ort_loss_scale.update_loss_scale(all_finite.item())
+        global_step += 1
+
+    sample_size = sample['ntokens']
+    logging_output = {
+        'loss': loss.data,
+        'ntokens': sample['ntokens'],
+        'nsentences': sample['target'].size(0),
+        'sample_size': sample_size,
+    }
+
+    return loss, sample_size, logging_output

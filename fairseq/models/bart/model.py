@@ -73,9 +73,9 @@ class BARTModel(TransformerModel):
         print('BART src_tokens size: {}'.format(src_tokens.size()))
         print('BART src_lengths size: {}'.format(src_lengths.size()))
         print('BART prev_output_tokens size: {}'.format(prev_output_tokens.size()))
-        print('BART features_only size: {}, value: {}'.format(features_only.size(), features_only))
-        classification_head_name=None
-        features_only=False
+        #print('BART features_only size: {}, value: {}'.format(features_only.size(), features_only))
+        #classification_head_name=None
+        #features_only=False
         encoder_out = self.encoder(
             src_tokens,
             src_lengths=src_lengths,
@@ -96,6 +96,7 @@ class BARTModel(TransformerModel):
             x = self.classification_heads[classification_head_name](
                 sentence_representation
             )
+        print('BART output x size: {}'.format(x.size()))
         return x, extra
 
     @classmethod

@@ -368,6 +368,8 @@ def softmax(x, dim: int, onnx_trace: bool = False):
 
 
 def log_softmax(x, dim: int, onnx_trace: bool = False):
+    #ORT edit
+    onnx_trace = True
     if onnx_trace:
         return F.log_softmax(x.float(), dim=dim)
     else:
