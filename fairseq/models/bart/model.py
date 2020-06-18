@@ -70,12 +70,18 @@ class BARTModel(TransformerModel):
     ):
         if classification_head_name is not None:
             features_only = True
-
+        print('BART src_tokens size: {}'.format(src_tokens.size()))
+        print('BART src_lengths size: {}'.format(src_lengths.size()))
+        print('BART prev_output_tokens size: {}'.format(prev_output_tokens.size()))
+        print('BART features_only size: {}, value: {}'.format(features_only.size(), features_only))
+        classification_head_name=None
+        features_only=False
         encoder_out = self.encoder(
             src_tokens,
             src_lengths=src_lengths,
             **kwargs,
         )
+
         x, extra = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,

@@ -41,9 +41,11 @@ class bart_model_with_loss(torch.nn.Module):
         self.loss_fn_ = loss_fn
 
     def forward(self, src_tokens, src_lengths, prev_output_tokens, target):
-        net_output = self.model_(src_tokens, src_lengths, prev_output_tokens)
-        lprobs = model.get_normalized_probs(net_output, log_probs=True)
-        lprobs = lprobs.view(-1, lprobs.size(-1))
+        net_output = self.model_(src_tokens, src_lengths, prev_output_tokens, features_only=False, classification_head_name=None)
+        net_out = net_output[0]
+        net_out = net_out.view(-1, net_out.size(-1))
+        lprobs = self.model_.get_normalized_probs(net_out, log_probs=True)
+        #lprobs = lprobs.view(-1, lprobs.size(-1))
         loss = self.loss_fn_(lprobs, target)
         return loss
 # ---
@@ -146,6 +148,7 @@ class ORTTrainer(object):
 
     @property
     def model(self):
+        '''
         if self._wrapped_model is None:
             if (
                 self.data_parallel_world_size > 1
@@ -158,6 +161,8 @@ class ORTTrainer(object):
                 )
             else:
                 self._wrapped_model = self._model
+        '''
+        self._wrapped_model = self._model
         return self._wrapped_model
 
     @property
@@ -378,8 +383,8 @@ class ORTTrainer(object):
             self._dummy_batch = samples[0]
 
         self._set_seed()
-        self.model.train()
-        self.criterion.train()
+        #self.model.train()
+        #self.criterion.train()
         #self.zero_grad()
 
         metrics.log_start_time("train_wall", priority=800, round=0)
@@ -395,6 +400,9 @@ class ORTTrainer(object):
                 is_dummy_batch = True
             else:
                 is_dummy_batch = False
+
+            #for key, value in sample.items():
+                #print('Sample key: {}'.format(key))
 
             def maybe_no_sync():
                 """

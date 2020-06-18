@@ -67,7 +67,7 @@ def bert_model_description(args):
     src_tokens_desc = IODescription('src_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
     src_lengths_desc = IODescription('src_lengths', ['batch'], torch.int64, num_classes = args.max_tokens_valid)
     prev_output_tokens_desc = IODescription('prev_output_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
-    target_desc = IODescription('target', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
+    target_desc = IODescription('target', ['max_tokens'], torch.int64, num_classes = vocab_size)
 
     loss_desc = IODescription('loss', [], torch.float32)
     return ModelDescription([src_tokens_desc, src_lengths_desc, prev_output_tokens_desc, target_desc], [loss_desc])
@@ -83,10 +83,10 @@ def postprocess_model(model):
     handle_expand_input_is_not_constant_case(model)
     fix_expand(model)
     fix_dim(model)
-    process_dropout(model)
+    #process_dropout(model)
     # --- 
     add_expand_shape(model)
-    layer_norm_transform(model)
+    #layer_norm_transform(model)
 
 def create_ort_trainer(args, device, model):
     # set GPU memory limitation
@@ -152,16 +152,17 @@ def get_lr(args, update_num):
     # initial learning rate
     lr = args.warmup_init_lr
     
-    if num_updates < args.warmup_updates:
-        lr = args.warmup_init_lr + num_updates*lr_step
+    if update_num < args.warmup_updates:
+        lr = args.warmup_init_lr + update_num*lr_step
     else:
-        lr = decay_factor * num_updates**-0.5
+        lr = decay_factor * update_num**-0.5
     return lr
 
 def ort_train_step(args, update_num, model, sample):
-    src_tokens = sample['src_tokens']
-    src_lengths = sample['src_lengths']
-    prev_output_tokens = sample['prev_output_tokens']
+    net_input = sample['net_input']
+    src_tokens = net_input['src_tokens']
+    src_lengths = net_input['src_lengths']
+    prev_output_tokens = net_input['prev_output_tokens']
     target = sample['target']
     target = target.view(-1)
 
