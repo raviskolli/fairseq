@@ -49,6 +49,7 @@ def main(args, init_distributed=False):
 
     # Initialize CUDA and distributed training
     if torch.cuda.is_available() and not args.cpu and not getattr(args, 'tpu', False):
+        print('Train: setting cuda device id: {}'.format(args.device_id))
         torch.cuda.set_device(args.device_id)
     np.random.seed(args.seed)
     utils.set_torch_seed(args.seed)

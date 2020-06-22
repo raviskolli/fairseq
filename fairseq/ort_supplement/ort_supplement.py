@@ -183,6 +183,7 @@ def ort_train_step(args, update_num, model, sample):
     else:
         loss = model(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, learning_rate)
 
+    print('ORT_TRAIN_STEP: completed train step')
     if training_steps % args.gradient_accumulation_steps == 0:
         if args.fp16:
             args.ort_loss_scale.update_loss_scale(all_finite.item())

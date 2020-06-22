@@ -405,7 +405,7 @@ class ORTTrainer(object):
 
             #for key, value in sample.items():
                 #print('Sample key: {}'.format(key))
-            '''
+            
             # Visualize model
             model_desc = ort_supplement.bart_model_description(self.args)
         
@@ -437,7 +437,7 @@ class ORTTrainer(object):
             src_lengths.cpu()
             prev_output_tokens.cpu()
             target.cpu()
-            self._model.cuda()
+            #self._model.cuda()
             input_names = [input.name_ for input in model_desc.inputs_]
             output_names = [output.name_ for output in model_desc.outputs_]
 
@@ -465,7 +465,7 @@ class ORTTrainer(object):
                     example_outputs=tuple(sample_outputs),
                     do_constant_folding=False,
                     **other_export_options)
-            '''
+            
             def maybe_no_sync():
                 """
                 Whenever *samples* contains more than one mini-batch, we
