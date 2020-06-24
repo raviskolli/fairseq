@@ -360,4 +360,38 @@ def add_expand_shape(model):
     expand_out = model.graph.value_info.add()
     expand_out.name = expand_node[0].output[0] # base: '421' # tiny: '85'
     expand_out.type.CopyFrom(model.graph.input[0].type)
-    
+
+def get_dim_from_type_proto(dim):
+    return getattr(dim, dim.WhichOneof('value')) if type(dim.WhichOneof('value')) == str else None
+
+def get_shape_from_type_proto(type_proto):
+    return [get_dim_from_type_proto(d) for d in type_proto.tensor_type.shape.dim]
+
+def find_softmax_crossentropy(model):
+    for node in model.graph.node:
+        print('Node: ', node.name)
+        if node.op_type == 'SoftmaxCrossEntropyLoss':
+            print('Found SoftmaxCrossEntropyLoss node')
+            print('First input name: ', node.input[0])
+            print('Second input name: ', node.input[1])
+            print('Output name: ', node.output[0])
+            '''
+            for i in list(model.graph.input):
+                if i.name == node.input[1]:
+                    print('Found target input')
+                    for d in get_shape_from_type_proto(i.type):
+                        print (d)
+                if i.name == node.input[0]:
+                    print('Found input 0')
+                    for d in get_shape_from_type_proto(i.type):
+                        print (d)
+                if i.name == 'loss':
+                    print('Found loss')
+            '''
+            '''
+            for input in node.input:
+                print(input)
+                get_shape_from_type_proto(input.type)
+            '''
+    for input in model.graph.input:
+        print('Input: ', input.name)

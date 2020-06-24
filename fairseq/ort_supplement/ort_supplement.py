@@ -73,11 +73,12 @@ def bart_model_description(args):
     return ModelDescription([src_tokens_desc, src_lengths_desc, prev_output_tokens_desc, target_desc], [loss_desc])
 
 # for opset 10
-from fairseq.ort_supplement.onnx_transforms.model_transform import add_name, fix_transpose, add_expand_shape, process_concat, process_dropout, handle_expand_input_is_not_constant_case, fix_dim, fix_expand
+from fairseq.ort_supplement.onnx_transforms.model_transform import find_softmax_crossentropy
 
 from fairseq.ort_supplement.onnx_transforms.layer_norm_transform import layer_norm_transform
 
 def postprocess_model(model):
+    '''
     add_name(model)
     # for opset 10 ..
     handle_expand_input_is_not_constant_case(model)
@@ -87,6 +88,8 @@ def postprocess_model(model):
     # --- 
     add_expand_shape(model)
     #layer_norm_transform(model)
+    '''
+    find_softmax_crossentropy(model)
 
 def create_ort_trainer(args, device, model):
     # set GPU memory limitation
@@ -125,7 +128,7 @@ def create_ort_trainer(args, device, model):
     model = ORTTrainer(model, None, bart_model_description(args), "AdamOptimizer", 
         map_optimizer_attributes,
         IODescription('Learning_Rate', [1,], torch.float32),
-        device, #postprocess_model=postprocess_model, 
+        device, _extra_postprocess=postprocess_model, 
         gradient_accumulation_steps=args.update_freq[0],
         world_rank=args.distributed_rank, world_size=args.distributed_world_size,
         use_mixed_precision = True if args.fp16 else False,

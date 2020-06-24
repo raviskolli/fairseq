@@ -30,6 +30,7 @@ torch._C._jit_set_profiling_executor(False)
 import onnx
 global ort_supplement
 import fairseq.ort_supplement.ort_supplement as ort_supplement
+from fairseq.ort_supplement.symbolic_shape_infer import SymbolicShapeInference
 
 # --- ort training edit
 # we manually add the loss function into the bert model
@@ -84,6 +85,8 @@ class ORTTrainer(object):
         self._criterion = criterion
         self._ptmodel = model
         self._model = model
+        #Shape inference
+        #self._infer_model =  SymbolicShapeInference.infer_shapes(self._model, auto_merge=True, int_max=100000)
         self._model = bart_model_with_loss(self._model, criterion)
         self._model = ort_supplement.create_ort_trainer(args, device, self._model)
 
