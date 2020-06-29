@@ -665,7 +665,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
         )
-        print('Transformers prev_output_tokens size: {}'.format(prev_output_tokens.size()))
+        #print('Transformers prev_output_tokens size: {}'.format(prev_output_tokens.size()))
         #for item in encoder_out:
             #print('Transformers encoder_out : {}'.format(item))
         #print('Transformers features_only size: {}'.format(features_only.size()))

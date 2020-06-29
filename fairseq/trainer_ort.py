@@ -41,15 +41,17 @@ class bart_model_with_loss(torch.nn.Module):
         self.model_ = model
         self.loss_fn_ = loss_fn
 
-    def forward(self, src_tokens, src_lengths, prev_output_tokens, target):
+    #def forward(self, src_tokens, src_lengths, prev_output_tokens, target):
+    def forward(self, src_tokens, prev_output_tokens, target):
+        src_lengths = None
         net_output = self.model_(src_tokens, src_lengths, prev_output_tokens, features_only=False, classification_head_name=None)
         net_out = net_output[0]
         net_out = net_out.view(-1, net_out.size(-1))
-        print('ORT Trainer net_out size: {}'.format(net_out.size()))
+        #print('ORT Trainer net_out size: {}'.format(net_out.size()))
         lprobs = self.model_.get_normalized_probs(net_out, log_probs=True)
         #lprobs = lprobs.view(-1, lprobs.size(-1))
         loss = self.loss_fn_(lprobs, target)
-        print('ORT Trainer loss value: {}'.format(loss))
+        #print('ORT Trainer loss value: {}'.format(loss))
         return loss
 # ---
 
@@ -391,24 +393,35 @@ class ORTTrainer(object):
         #self.model.train()
         #self.criterion.train()
         #self.zero_grad()
+        #print(len(samples))
 
         metrics.log_start_time("train_wall", priority=800, round=0)
 
         # forward and backward pass
         logging_outputs, sample_size, ooms = [], 0, 0
         for i, sample in enumerate(samples):
-            sample = self._prepare_sample(sample)
+            #sample = self._prepare_sample(sample)
+
+            net_input = sample['net_input']
+            src_tokens = net_input['src_tokens']
+            print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
+            src_lengths = net_input['src_lengths']
+            if (src_lengths.size(0) != 3):
+                print('src_lengths incorrect size', src_lengths.size(0))
+                sample = None
+
             if sample is None:
                 # when sample is None, run forward/backward on a dummy batch
                 # and ignore the resulting gradients
                 sample = self._prepare_sample(self._dummy_batch)
                 is_dummy_batch = True
             else:
+                sample = self._prepare_sample(sample)
                 is_dummy_batch = False
 
             #for key, value in sample.items():
                 #print('Sample key: {}'.format(key))
-            
+            '''
             # Visualize model
             model_desc = ort_supplement.bart_model_description(self.args)
         
@@ -468,7 +481,7 @@ class ORTTrainer(object):
                     example_outputs=tuple(sample_outputs),
                     do_constant_folding=False,
                     **other_export_options)
-            
+            '''
             def maybe_no_sync():
                 """
                 Whenever *samples* contains more than one mini-batch, we
@@ -589,9 +602,7 @@ class ORTTrainer(object):
             self.set_num_updates(self.get_num_updates() + 1)
 
             # log stats
-            logging_output = self._reduce_and_log_stats(
-                logging_outputs, sample_size, grad_norm,
-            )
+            logging_output = self._reduce_and_log_stats(logging_outputs, sample_size)
             '''
             # clear CUDA cache to reduce memory fragmentation
             if (
@@ -746,8 +757,8 @@ class ORTTrainer(object):
         """Set the number of parameters updates."""
         self._num_updates = num_updates
         self.lr_step_update()
-        if self.quantizer:
-            self.quantizer.step_update(self._num_updates)
+        #if self.quantizer:
+            #self.quantizer.step_update(self._num_updates)
         metrics.log_scalar("num_updates", self._num_updates, weight=0, priority=200)
 
     def clip_grad_norm(self, clip_norm):

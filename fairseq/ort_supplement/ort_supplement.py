@@ -55,22 +55,25 @@ def setup_onnxruntime_with_mpi(args):
 
 def bart_model_description(args):
     vocab_size = 50349
-
+    batch = 3
+    max_tokens_valid = 1023
+    max_tokens = 3069
+    '''
     # allow variable input sizes:
-    # input_ids_desc = IODescription('input_ids', ['batch', 'max_seq_len_in_batch'], torch.int64, num_classes = vocab_size)
-    # segment_ids_desc = IODescription('segment_ids', ['batch', 'max_seq_len_in_batch'], torch.int64, num_classes = 2)
-    # input_mask_desc = IODescription('input_mask', ['batch', 'max_seq_len_in_batch'], torch.int64, num_classes = 2)
-    # masked_lm_labels_desc = IODescription('masked_lm_labels', ['batch', 'max_seq_len_in_batch'], torch.int64, num_classes = vocab_size)
-    # next_sentence_labels_desc = IODescription('next_sentence_labels', ['batch',], torch.int64, num_classes = 2)
-
-    # set concrete input sizes to permit optimization
     src_tokens_desc = IODescription('src_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
     src_lengths_desc = IODescription('src_lengths', ['batch'], torch.int64, num_classes = args.max_tokens_valid)
     prev_output_tokens_desc = IODescription('prev_output_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
     target_desc = IODescription('target', ['max_tokens'], torch.int64, num_classes = vocab_size)
+    '''
+    # set concrete input sizes to permit optimization
+    src_tokens_desc = IODescription('src_tokens', [batch, max_tokens_valid], torch.int64, num_classes = vocab_size)
+    src_lengths_desc = IODescription('src_lengths', [batch], torch.int64, num_classes = args.max_tokens_valid)
+    prev_output_tokens_desc = IODescription('prev_output_tokens', [batch, max_tokens_valid], torch.int64, num_classes = vocab_size)
+    target_desc = IODescription('target', [max_tokens], torch.int64, num_classes = vocab_size)
 
     loss_desc = IODescription('loss', [], torch.float32)
-    return ModelDescription([src_tokens_desc, src_lengths_desc, prev_output_tokens_desc, target_desc], [loss_desc])
+    #return ModelDescription([src_tokens_desc, src_lengths_desc, prev_output_tokens_desc, target_desc], [loss_desc])
+    return ModelDescription([src_tokens_desc, prev_output_tokens_desc, target_desc], [loss_desc])
 
 # for opset 10
 from fairseq.ort_supplement.onnx_transforms.model_transform import find_softmax_crossentropy
@@ -132,7 +135,7 @@ def create_ort_trainer(args, device, model):
         gradient_accumulation_steps=args.update_freq[0],
         world_rank=args.distributed_rank, world_size=args.distributed_world_size,
         use_mixed_precision = True if args.fp16 else False,
-        allreduce_post_accumulation = False, #if args.allreduce_post_accumulation else False,
+        allreduce_post_accumulation = True, #if args.allreduce_post_accumulation else False,
         partition_optimizer = False, #if args.partition_optimizer else False,
         _opset_version = 12)
 
@@ -165,20 +168,22 @@ def ort_train_step(args, update_num, model, sample):
     net_input = sample['net_input']
     src_tokens = net_input['src_tokens']
     src_lengths = net_input['src_lengths']
+    src_lengths.cpu()
     prev_output_tokens = net_input['prev_output_tokens']
     target = sample['target']
     target = target.view(-1)
-
+    '''
     print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
     print('ORT_TRAIN_STEP: src_lengths size: {}'.format(src_lengths.size()))
     print('ORT_TRAIN_STEP: prev_output_tokens size: {}'.format(prev_output_tokens.size()))
     print('ORT_TRAIN_STEP: target size: {}'.format(target.size()))
-
+    '''
     lr = get_lr(args, update_num)
     learning_rate = torch.tensor([lr])
     if args.fp16:
         loss_scale = torch.tensor([args.ort_loss_scale.loss_scale_])
-        loss = model.train_step(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, loss_scale)
+        #loss = model.train_step(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, loss_scale)
+        loss = model.train_step(src_tokens, prev_output_tokens, target, learning_rate, loss_scale)
         all_finite = 1
         if isinstance(loss, (list, tuple)):
             assert len(loss) == 2
@@ -186,11 +191,11 @@ def ort_train_step(args, update_num, model, sample):
     else:
         loss = model(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, learning_rate)
 
-    print('ORT_TRAIN_STEP: completed train step')
-    if training_steps % args.gradient_accumulation_steps == 0:
+    #print('ORT_TRAIN_STEP: completed train step ', update_num)
+    if update_num != 0 and update_num % args.update_freq[0] == 0:
         if args.fp16:
             args.ort_loss_scale.update_loss_scale(all_finite.item())
-        global_step += 1
+        #global_step += 1
 
     sample_size = sample['ntokens']
     logging_output = {
@@ -199,6 +204,10 @@ def ort_train_step(args, update_num, model, sample):
         'nsentences': sample['target'].size(0),
         'sample_size': sample_size,
     }
+    #print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
+    print('ORT_TRAIN_STEP: loss: {}'.format(loss.data))
+    #print('ORT_TRAIN_STEP: sample_size: {}'.format(sample_size))
+    #print('ORT_TRAIN_STEP: nsentences: {}'.format(sample['target'].size(0)))
 
     return loss, sample_size, logging_output
 
@@ -219,18 +228,14 @@ def ort_eval_step(args, update_num, model, sample):
     learning_rate = torch.tensor([lr])
     if args.fp16:
         loss_scale = torch.tensor([args.ort_loss_scale.loss_scale_])
-        loss = model.train_step(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, loss_scale)
+        #loss = model.eval_step(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, loss_scale)
+        loss = model.eval_step(src_tokens, prev_output_tokens, target, learning_rate, loss_scale)
         all_finite = 1
         if isinstance(loss, (list, tuple)):
             assert len(loss) == 2
             loss, all_finite = loss
     else:
         loss = model(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, learning_rate)
-
-    if training_steps % args.gradient_accumulation_steps == 0:
-        if args.fp16:
-            args.ort_loss_scale.update_loss_scale(all_finite.item())
-        global_step += 1
 
     sample_size = sample['ntokens']
     logging_output = {

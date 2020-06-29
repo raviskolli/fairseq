@@ -369,12 +369,12 @@ def get_shape_from_type_proto(type_proto):
 
 def find_softmax_crossentropy(model):
     for node in model.graph.node:
-        print('Node: ', node.name)
+        #print('Node: ', node.name)
         if node.op_type == 'SoftmaxCrossEntropyLoss':
             print('Found SoftmaxCrossEntropyLoss node')
-            print('First input name: ', node.input[0])
-            print('Second input name: ', node.input[1])
-            print('Output name: ', node.output[0])
+            #print('First input name: ', node.input[0])
+            #print('Second input name: ', node.input[1])
+            #print('Output name: ', node.output[0])
             '''
             for i in list(model.graph.input):
                 if i.name == node.input[1]:

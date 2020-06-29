@@ -28,9 +28,22 @@ def collate(
             [s[key] for s in samples],
             pad_idx, eos_idx, left_pad, move_eos_to_beginning,
         )
+    '''    
+    print('Denoising Dataset: samples type: {}, len: {}'.format(type(samples), len(samples)))
+    for item in samples:
+        print('Denoising Dataset: samples item type: {}'.format(type(item)))
+        for key, value in item.items():
+            print('Denoising Dataset: samples item key: {}'.format(key))
+            print('Denoising Dataset: samples item value type: {}'.format(type(value)))
+            if(torch.is_tensor(value)):
+                print('Denoising Dataset: samples item value size: {}'.format(value.size()))
+            else:
+                print('Denoising Dataset: samples item value: {}'.format(value))
+    '''
 
     id = torch.LongTensor([s['id'] for s in samples])
     src_tokens = merge('source', left_pad=left_pad_source)
+    #print('Denoising Dataset: size after merge: {}'.format(src_tokens.size()))
     # sort by descending source length
     src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
     src_lengths, sort_order = src_lengths.sort(descending=True)
@@ -177,6 +190,9 @@ class DenoisingDataset(FairseqDataset):
         assert (source <= len(self.vocab)).all()
         assert source[0] == self.vocab.bos()
         assert source[-1] == self.eos
+        #print('Denoising Dataset: id: {}'.format(index))
+        #print('Denoising Dataset: source size: {}'.format(source.size()))
+        #print('Denoising Dataset: target size: {}'.format(target.size()))
         return {
             'id': index,
             'source': source,

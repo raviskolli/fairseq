@@ -177,6 +177,7 @@ def tpu_data_loader(args, itr):
 @metrics.aggregate('train')
 def train(args, trainer, task, epoch_itr):
     """Train the model for one epoch and return validation losses."""
+    print('In Train')
     # Initialize data iterator
     itr = epoch_itr.next_epoch_itr(
         fix_batches_to_gpus=args.fix_batches_to_gpus,
@@ -206,6 +207,13 @@ def train(args, trainer, task, epoch_itr):
     valid_subsets = args.valid_subset.split(',')
     should_stop = False
     for samples in progress:
+        '''
+        for i, sample in enumerate(samples):
+            net_input = sample['net_input']
+            src_tokens = net_input['src_tokens']
+            print(str(i)+'\t'+str(list(src_tokens.size())[0])+'\t'+str(list(src_tokens.size())[1]))
+        continue
+        '''
         with metrics.aggregate('train_inner'):
             log_output = trainer.train_step(samples)
             if log_output is None:  # OOM, overflow, ...

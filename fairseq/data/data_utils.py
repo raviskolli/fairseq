@@ -13,7 +13,7 @@ import logging
 import os
 import sys
 import types
-
+import torch
 import numpy as np
 
 
@@ -32,9 +32,15 @@ def infer_language_pair(path):
 
 def collate_tokens(values, pad_idx, eos_idx=None, left_pad=False, move_eos_to_beginning=False):
     """Convert a list of 1d tensors into a padded 2d tensor."""
-    size = max(v.size(0) for v in values)
+    #size = max(v.size(0) for v in values)
+    size = 1023
     res = values[0].new(len(values), size).fill_(pad_idx)
-
+    '''
+    v0 = values[0]
+    for v in values:
+        print('Denoising Dataset collate tokens size: {}'.format(v.size()))
+        print('Denoising Dataset collate tensor same: {}'.format(torch.equal(v0, v)))
+    '''
     def copy_tensor(src, dst):
         assert dst.numel() == src.numel()
         if move_eos_to_beginning:
@@ -188,6 +194,7 @@ def filter_by_size(indices, dataset, max_positions, raise_exception=False):
         raise Exception((
             'Size of sample #{} is invalid (={}) since max_positions={}, '
             'skip this example with --skip-invalid-size-inputs-valid-test'
+            'skip this example with --skip-invalid-size-inputs-valid-test'
         ).format(ignored[0], dataset.size(ignored[0]), max_positions))
     if len(ignored) > 0:
         logger.warning((
@@ -227,7 +234,7 @@ def batch_by_size(
     max_tokens = max_tokens if max_tokens is not None else -1
     max_sentences = max_sentences if max_sentences is not None else -1
     bsz_mult = required_batch_size_multiple
-
+    print('Data Utils: bsz_mult', bsz_mult)
     if isinstance(indices, types.GeneratorType):
         indices = np.fromiter(indices, dtype=np.int64, count=-1)
 

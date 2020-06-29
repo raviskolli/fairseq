@@ -162,6 +162,7 @@ class FairseqTask(object):
         # get indices ordered by example size
         with data_utils.numpy_seed(seed):
             indices = dataset.ordered_indices()
+            print('Fairseq Task: Dataset indices size: {}'.format(len(indices)))
 
         # filter examples that are too large
         if max_positions is not None:
@@ -171,6 +172,7 @@ class FairseqTask(object):
                 max_positions,
                 raise_exception=(not ignore_invalid_inputs),
             )
+        print('Fairseq Task: Dataset indices size after filter: {}'.format(len(indices)))
 
         # create mini-batches with given size constraints
         batch_sampler = data_utils.batch_by_size(
@@ -180,7 +182,8 @@ class FairseqTask(object):
             max_sentences=max_sentences,
             required_batch_size_multiple=required_batch_size_multiple,
         )
-
+        print('Fairseq Task: batch_sampler type: {}, len: {}'.format(type(batch_sampler), len(batch_sampler)))
+        print('Fairseq Task: batch_sampler elem type: {}, len: {}, value: {}'.format(type(batch_sampler[0]), len(batch_sampler[0]), batch_sampler[0]))
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
             dataset=dataset,

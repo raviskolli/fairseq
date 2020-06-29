@@ -52,17 +52,19 @@ cpdef list batch_by_size_fast(
             "limit of {}!".format(idx, sample_len, max_tokens)
         )
         num_tokens = (len(batch) + 1) * sample_len
-
         if _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
             mod_len = max(
                 bsz_mult * (len(batch) // bsz_mult),
                 len(batch) % bsz_mult,
             )
+            #print('data_utils_fast: batch len: {}, mod_len: {}'.format(len(batch), mod_len))
             batches.append(batch[:mod_len])
             batch = batch[mod_len:]
             sample_lens = sample_lens[mod_len:]
             sample_len = max(sample_lens) if len(sample_lens) > 0 else 0
         batch.append(idx)
+        #print('data_utils_fast: batch len: {}, sample_len: {}, num_tokens: {}'.format(len(batch), sample_len, num_tokens))
     if len(batch) > 0:
         batches.append(batch)
+        #print('data_utils_fast: batch len: {}'.format(len(batch)))
     return batches
