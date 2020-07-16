@@ -25,14 +25,9 @@ from fairseq import (
 )
 from fairseq.data import iterators
 from fairseq.logging import meters, metrics, progress_bar
-<<<<<<< HEAD
-from fairseq.trainer import Trainer
-from fairseq.trainer_ort import ORTTrainer
-=======
->>>>>>> upstream/master
 from fairseq.model_parallel.megatron_trainer import MegatronTrainer
 from fairseq.trainer import Trainer
-
+from fairseq.trainer_ort import ORTTrainer
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",

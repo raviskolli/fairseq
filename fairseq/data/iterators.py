@@ -17,6 +17,7 @@ import torch
 
 from fairseq.data import data_utils
 
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -80,6 +81,10 @@ class CountingIterator(object):
         Truncates the iterator to n elements at most.
         """
         self.total = min(self.total, n)
+
+        # Propagate this change to the underlying iterator
+        if hasattr(self.iterable, "take"):
+            self.iterable.take(n)
 
 
 class EpochBatchIterating(object):
@@ -183,8 +188,10 @@ class EpochBatchIterator(EpochBatchIterating):
     Args:
         dataset (~torch.utils.data.Dataset): dataset from which to load the data
         collate_fn (callable): merges a list of samples to form a mini-batch
-        batch_sampler (~torch.utils.data.Sampler): an iterator over batches of
-            indices
+        batch_sampler (~torch.utils.data.Sampler or a callable): an iterator over batches of
+            indices, or a callable to create such an iterator (~torch.utils.data.Sampler).
+            A callable batch_sampler will be called for each epoch to enable per epoch dynamic
+            batch iterators defined by this callable batch_sampler.
         seed (int, optional): seed for random number generator for
             reproducibility (default: 1).
         num_shards (int, optional): shard the data iterator into N
@@ -199,29 +206,39 @@ class EpochBatchIterator(EpochBatchIterating):
         buffer_size (int, optional): the number of batches to keep ready in the
             queue. Helps speeding up dataloading. When buffer_size is zero, the
             default torch.utils.data.DataLoader preloading is used.
+        timeout (int, optional): if positive, the timeout value for collecting a batch
+            from workers. Should always be non-negative. (default: ``0``)
     """
 
     def __init__(
         self, dataset, collate_fn, batch_sampler, seed=1, num_shards=1, shard_id=0,
-        num_workers=0, epoch=1, buffer_size=0
+        num_workers=0, epoch=1, buffer_size=0, timeout=0,
     ):
         assert isinstance(dataset, torch.utils.data.Dataset)
         self.dataset = dataset
         self.collate_fn = collate_fn
-        self.frozen_batches = tuple(batch_sampler)
+        self.batch_sampler = batch_sampler
+        self._frozen_batches = tuple(batch_sampler) if not callable(batch_sampler) else None
         self.seed = seed
         self.num_shards = num_shards
         self.shard_id = shard_id
         self.num_workers = num_workers
         # This upper limit here is to prevent people from abusing this feature
         # in a shared computing environment.
-        self.buffer_size = min(buffer_size, 5)
+        self.buffer_size = min(buffer_size, 20)
+        self.timeout = timeout
 
         self.epoch = max(epoch, 1)  # we use 1-based indexing for epochs
         self.shuffle = True
         self._cur_epoch_itr = None
         self._next_epoch_itr = None
         self._supports_prefetch = getattr(dataset, 'supports_prefetch', False)
+
+    @property
+    def frozen_batches(self):
+        if self._frozen_batches is None:
+            self._frozen_batches = tuple(self.batch_sampler(self.dataset, self.epoch))
+        return self._frozen_batches
 
     def __len__(self):
         return int(math.ceil(len(self.frozen_batches) / float(self.num_shards)))
@@ -251,14 +268,17 @@ class EpochBatchIterator(EpochBatchIterating):
                 that :attr:`dataset` supports prefetching (default: False).
         """
         self.epoch = self.next_epoch_idx
+        self.dataset.set_epoch(self.epoch)
         if self._next_epoch_itr is not None:
             self._cur_epoch_itr = self._next_epoch_itr
             self._next_epoch_itr = None
         else:
+            if callable(self.batch_sampler):
+                # reset _frozen_batches to refresh the next epoch
+                self._frozen_batches = None
             self._cur_epoch_itr = self._get_iterator_for_epoch(
                 self.epoch, shuffle, fix_batches_to_gpus=fix_batches_to_gpus,
             )
-        self.dataset.set_epoch(self.epoch)
         self.shuffle = shuffle
         return self._cur_epoch_itr
 
@@ -341,6 +361,7 @@ class EpochBatchIterator(EpochBatchIterating):
             collate_fn=self.collate_fn,
             batch_sampler=batches[offset:],
             num_workers=self.num_workers,
+            timeout=self.timeout,
         )
 
         # Wrap with a BufferedIterator if needed
@@ -364,68 +385,24 @@ class GroupedIterator(CountingIterator):
     """
 
     def __init__(self, iterable, chunk_size):
+        itr = _chunk_iterator(iterable, chunk_size)
+        super().__init__(
+            itr,
+            start=int(math.ceil(getattr(iterable, 'n', 0) / float(chunk_size))),
+            total=int(math.ceil(len(iterable) / float(chunk_size))),
+        )
         self.chunk_size = chunk_size
 
-        n = getattr(iterable, 'n', 0)
-        itr = ichunked(
-            iterable,
-            chunk_size,
-            remaining=(len(iterable) - n),
-        )
-        start = int(math.ceil(n / float(chunk_size)))
-        total = int(math.ceil(len(iterable) / float(chunk_size)))
-        super().__init__(itr, start=start, total=total)
 
-
-class IndexableIterator(object):
-
-    def __init__(self, iterable, length):
-        self.iterable = iterable
-        self.itr = iter(self)
-        self.n = length
-        self._cache = []
-
-    def __len__(self):
-        return self.n
-
-    def __getitem__(self, index):
-        if index >= self.n:
-            raise IndexError
-        while len(self._cache) <= index:
-            self._cache.append(next(self.iterable))
-        return self._cache[index]
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield self[i]
-
-    def __next__(self):
-        return next(self.itr)
-
-    def __eq__(self, other):
-        if len(self) != len(other):
-            return False
-        for i in range(len(self)):
-            if self[i] != other[i]:
-                return False
-        return True
-
-
-def ichunked(iterable, n, remaining=None):
-    """Adapted from more_itertools.ichunked"""
-    if remaining is None:
-        remaining = len(iterable)
-    source = iter(iterable)
-    while remaining > 0:
-        item = next(source)
-
-        # Clone the source and yield an n-length slice
-        source, it = itertools.tee(itertools.chain([item], source))
-        yield IndexableIterator(itertools.islice(it, n), min(remaining, n))
-
-        # Advance the source iterable
-        next(itertools.islice(source, n, n), None)
-        remaining = max(0, remaining - n)
+def _chunk_iterator(itr, chunk_size):
+    chunk = []
+    for x in itr:
+        chunk.append(x)
+        if len(chunk) == chunk_size:
+            yield chunk
+            chunk = []
+    if len(chunk) > 0:
+        yield chunk
 
 
 class ShardedIterator(CountingIterator):
@@ -462,34 +439,52 @@ class ShardedIterator(CountingIterator):
 
 
 class BackgroundConsumer(Thread):
-    def __init__(self, queue, source):
+    def __init__(self, queue, source, max_len):
         Thread.__init__(self)
 
         self._queue = queue
         self._source = source
+        self._max_len = max_len
+        self.count = 0
 
     def run(self):
         try:
-            for item in self._source:
+            self._source_iter = iter(self._source)
+            for _ in range(len(self._source)):
+                item = next(self._source_iter)
                 self._queue.put(item)
+
+                # Stop if we reached the maximum length
+                self.count += 1
+                if self._max_len is not None and self.count >= self._max_len:
+                    break
 
             # Signal the consumer we are done.
             self._queue.put(_sentinel)
         except Exception as e:
             self._queue.put(e)
 
+        del self._source_iter
+
 
 class BufferedIterator(object):
     def __init__(self, size, iterable):
         self._queue = queue.Queue(size)
         self._iterable = iterable
-
-        self._consumer = BackgroundConsumer(self._queue, iterable)
-        self._consumer.daemon = True
-        self._consumer.start()
+        self.max_len = None
+        self._consumer = None
 
         self.start_time = time.time()
         self.warning_time = None
+
+    def _create_consumer(self):
+        self._consumer = BackgroundConsumer(
+            self._queue,
+            self._iterable,
+            self.max_len
+        )
+        self._consumer.daemon = True
+        self._consumer.start()
 
     def __iter__(self):
         return self
@@ -497,9 +492,16 @@ class BufferedIterator(object):
     def __len__(self):
         return len(self._iterable)
 
+    def take(self, n):
+        self.max_len = n
+
     def __next__(self):
+        # Create consumer if not created yet
+        if self._consumer is None:
+            self._create_consumer()
+
         # Notify the user if there is a data loading bottleneck
-        if self._queue.qsize() < max(1, self._queue.maxsize // 2):
+        if self._queue.qsize() < min(2, max(1, self._queue.maxsize // 2)):
             if time.time() - self.start_time > 5 * 60:
                 if self.warning_time is None or time.time() - self.warning_time > 15 * 60:
                     logger.info(

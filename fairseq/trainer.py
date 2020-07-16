@@ -95,6 +95,19 @@ class Trainer(object):
         if self.quantizer is not None:
             self.quantizer.set_trainer(self)
 
+        # get detailed cuda environment
+        if self.cuda:
+            self.cuda_env = utils.CudaEnvironment()
+            if self.data_parallel_world_size > 1:
+                self.cuda_env_arr = distributed_utils.all_gather_list(self.cuda_env)
+            else:
+                self.cuda_env_arr = [self.cuda_env]
+            if self.data_parallel_rank == 0:
+                utils.CudaEnvironment.pretty_print_cuda_env_list(self.cuda_env_arr)
+        else:
+            self.cuda_env = None
+            self.cuda_env_arr = None
+
         metrics.log_start_time("wall", priority=790, round=0)
 
     def reinitialize(self):
@@ -278,17 +291,6 @@ class Trainer(object):
                 )
             )
 
-            # handle changed world size
-            cpt_world_size = state["args"].distributed_world_size
-            if cpt_world_size != self.args.distributed_world_size:
-                logger.info("world size changed from checkpoint: {} -> {}".format(
-                    cpt_world_size, self.args.distributed_world_size
-                ))
-                old_iters = extra_state["train_iterator"]["iterations_in_epoch"]
-                extra_state["train_iterator"]["iterations_in_epoch"] = int(
-                    old_iters * cpt_world_size / self.args.distributed_world_size
-                )
-
             self.lr_step(epoch)
 
             if "metrics" in extra_state and not reset_meters:
@@ -437,6 +439,10 @@ class Trainer(object):
                     )
                     ooms += 1
                     self.zero_grad()
+                    if self.cuda:
+                        torch.cuda.empty_cache()
+                    if self.args.distributed_world_size == 1:
+                        return None
                 else:
                     raise e
 
@@ -473,17 +479,19 @@ class Trainer(object):
                 gradients = xm._fetch_gradients(self.optimizer.optimizer)
                 xm.all_reduce('sum', gradients, scale=1.0 / self.data_parallel_world_size)
 
-            # multiply gradients by (# GPUs / sample_size) since DDP
-            # already normalizes by the number of GPUs. Thus we get
-            # (sum_of_gradients / sample_size).
-            if not self.args.use_bmuf:
-                self.optimizer.multiply_grads(self.data_parallel_world_size / sample_size)
-            elif sample_size > 0:  # BMUF needs to check sample size
-                num = self.data_parallel_world_size if self._sync_stats() else 1
-                self.optimizer.multiply_grads(num / sample_size)
+            with torch.autograd.profiler.record_function("multiply-grads"):
+                # multiply gradients by (# GPUs / sample_size) since DDP
+                # already normalizes by the number of GPUs. Thus we get
+                # (sum_of_gradients / sample_size).
+                if not self.args.use_bmuf:
+                    self.optimizer.multiply_grads(self.data_parallel_world_size / sample_size)
+                elif sample_size > 0:  # BMUF needs to check sample size
+                    num = self.data_parallel_world_size if self._sync_stats() else 1
+                    self.optimizer.multiply_grads(num / sample_size)
 
-            # clip grads
-            grad_norm = self.clip_grad_norm(self.args.clip_norm)
+            with torch.autograd.profiler.record_function("clip-grads"):
+                # clip grads
+                grad_norm = self.clip_grad_norm(self.args.clip_norm)
 
             # check that grad norms are consistent across workers
             if (
@@ -493,8 +501,9 @@ class Trainer(object):
             ):
                 self._check_grad_norms(grad_norm)
 
-            # take an optimization step
-            self.optimizer.step()
+            with torch.autograd.profiler.record_function("optimizer"):
+                # take an optimization step
+                self.optimizer.step()
         except FloatingPointError:
             # re-run the forward and backward pass with hooks attached to print
             # out where it fails
