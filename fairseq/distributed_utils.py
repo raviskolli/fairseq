@@ -19,7 +19,7 @@ import torch.distributed as dist
 
 from fairseq import utils
 
-from fairseq.fairseq.ort_supplement import azureml_adapter
+from fairseq.ort_supplement import azureml_adapter
 
 logger = logging.getLogger(__name__)
 
