@@ -97,8 +97,7 @@ def postprocess_model(model):
 def create_ort_trainer(args, device, model):
     # set GPU memory limitation
     from onnxruntime.capi._pybind_state import set_cuda_mem_limit
-    ort_cuda_mem_limit_in_gbs = 32
-    set_cuda_mem_limit(int(ort_cuda_mem_limit_in_gbs * 1024 * 1024 *1024))
+    set_cuda_mem_limit(int(args.ort_cuda_mem_limit_in_gbs * 1024 * 1024 *1024))
 
     def map_optimizer_attributes(name):
         no_decay_keys = ["bias", "gamma", "beta", "LayerNorm"]
