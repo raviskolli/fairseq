@@ -131,7 +131,7 @@ def create_ort_trainer(args, device, model):
     model = ORTTrainer(model, None, bart_model_description(args), "AdamOptimizer", 
         map_optimizer_attributes,
         IODescription('Learning_Rate', [1,], torch.float32),
-        device, _extra_postprocess=postprocess_model, 
+        device, #_extra_postprocess=postprocess_model, 
         gradient_accumulation_steps=args.update_freq[0],
         world_rank=args.distributed_rank, world_size=args.distributed_world_size,
         use_mixed_precision = True if args.fp16 else False,
