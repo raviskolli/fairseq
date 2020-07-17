@@ -404,7 +404,7 @@ class ORTTrainer(object):
 
             net_input = sample['net_input']
             src_tokens = net_input['src_tokens']
-            print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
+            #print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
             src_lengths = net_input['src_lengths']
             if (src_lengths.size(0) != 3):
                 print('src_lengths incorrect size', src_lengths.size(0))

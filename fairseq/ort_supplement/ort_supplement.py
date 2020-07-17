@@ -97,7 +97,7 @@ def postprocess_model(model):
 def create_ort_trainer(args, device, model):
     # set GPU memory limitation
     from onnxruntime.capi._pybind_state import set_cuda_mem_limit
-    ort_cuda_mem_limit_in_gbs = 16
+    ort_cuda_mem_limit_in_gbs = 32
     set_cuda_mem_limit(int(ort_cuda_mem_limit_in_gbs * 1024 * 1024 *1024))
 
     def map_optimizer_attributes(name):
@@ -185,17 +185,19 @@ def ort_train_step(args, update_num, model, sample):
         #loss = model.train_step(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, loss_scale)
         loss = model.train_step(src_tokens, prev_output_tokens, target, learning_rate, loss_scale)
         all_finite = 1
+        update_loss_scale = False
         if isinstance(loss, (list, tuple)):
             assert len(loss) == 2
+            update_loss_scale = True
             loss, all_finite = loss
     else:
         loss = model(src_tokens, src_lengths, prev_output_tokens, target, learning_rate, learning_rate)
 
     #print('ORT_TRAIN_STEP: completed train step ', update_num)
-    if update_num != 0 and update_num % args.update_freq[0] == 0:
-        if args.fp16:
-            args.ort_loss_scale.update_loss_scale(all_finite.item())
-        #global_step += 1
+    #if update_num != 0 and update_num % args.update_freq[0] == 0:
+    if args.fp16 and update_loss_scale:
+        args.ort_loss_scale.update_loss_scale(all_finite.item())
+    #global_step += 1
 
     sample_size = sample['ntokens']
     logging_output = {
@@ -205,7 +207,7 @@ def ort_train_step(args, update_num, model, sample):
         'sample_size': sample_size,
     }
     #print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
-    print('ORT_TRAIN_STEP: loss: {}'.format(loss.data))
+    #print('ORT_TRAIN_STEP: loss: {}'.format(loss.data))
     #print('ORT_TRAIN_STEP: sample_size: {}'.format(sample_size))
     #print('ORT_TRAIN_STEP: nsentences: {}'.format(sample['target'].size(0)))
 

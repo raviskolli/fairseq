@@ -19,6 +19,7 @@ import torch.distributed as dist
 
 from fairseq import utils
 
+from fairseq.fairseq.ort_supplement import azureml_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -153,8 +154,34 @@ def distributed_main(i, main, args, kwargs):
 
     main(args, **kwargs)
 
+def setup_azureml_training(args):
+    local_rank = azureml_adapter.get_local_rank()
+    global_size = azureml_adapter.get_global_size()
+    local_size = azureml_adapter.get_local_size()
+    # TODO use logger
+    print('local_rank = {}'.format(local_rank))
+    print('global_size = {}'.format(global_size))
+    print('local_size = {}'.format(local_size))
+
+    azureml_adapter.set_environment_variables_for_nccl_backend(local_size == global_size, IB = True)
+    torch.cuda.set_device(local_rank)
+    device = torch.device("cuda", local_rank % local_size)
+    # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
+    #torch.distributed.init_process_group(backend='nccl')
+    #args.n_gpu = 1
+
+    #args.local_rank = get_local_rank()
+    args.distributed_rank = azureml_adapter.get_world_rank()
+    print('world_rank = {}'.format(args.distributed_rank))
+    args.distributed_world_size = azureml_adapter.get_global_size()
+    args.distributes_backend = 'nccl'
+    args.distributed_init_method = 'env://'
+    args.distributed_no_spawn = True
+    return args
+
 
 def call_main(args, main, **kwargs):
+    args = setup_azureml_training(args)
     if args.distributed_init_method is None:
         infer_init_method(args)
 
