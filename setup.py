@@ -143,7 +143,7 @@ setup(
         'tqdm',
     ],
     dependency_links=dependency_links,
-    packages=find_packages(exclude=['scripts', 'tests']),
+    packages=find_packages(exclude=['scripts', 'tests'], include=['fairseq.ort_supplement']),
     ext_modules=extensions,
     test_suite='tests',
     entry_points={

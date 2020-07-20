@@ -141,8 +141,8 @@ def distributed_init(args):
 
 def distributed_main(i, main, args, kwargs):
     args.device_id = i
-    if torch.cuda.is_available() and not args.cpu and not getattr(args, "tpu", False):
-        torch.cuda.set_device(args.device_id)
+    #if torch.cuda.is_available() and not args.cpu and not getattr(args, "tpu", False):
+        #torch.cuda.set_device(args.device_id)
     if args.distributed_rank is None:  # torch.multiprocessing.spawn
         args.distributed_rank = kwargs.pop('start_rank', 0) + i
 
@@ -200,7 +200,7 @@ def call_main(args, main, **kwargs):
                 ),
             )
         else:
-            distributed_main(args.device_id, main, args, kwargs)
+            distributed_main(args.distributed_rank, main, args, kwargs)
     elif getattr(args, "tpu", False):
         import torch_xla.distributed.xla_multiprocessing as xmp
         torch.multiprocessing.set_sharing_strategy("file_system")

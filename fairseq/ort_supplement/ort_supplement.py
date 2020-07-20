@@ -42,11 +42,11 @@ def setup_onnxruntime_with_mpi(args):
         torch.distributed.init_process_group(backend='nccl')
     '''
 
-    torch.cuda.set_device(args.distributed_rank)
-    device = torch.device("cuda", args.distributed_rank)
+    #torch.cuda.set_device(args.distributed_rank)
+    device = torch.device("cuda", get_local_rank)
 
     from onnxruntime.capi._pybind_state import set_cuda_device_id 
-    set_cuda_device_id(args.distributed_rank)
+    set_cuda_device_id(get_local_rank)
 
     from onnxruntime.capi._pybind_state import set_arena_extend_strategy, ArenaExtendStrategy
     set_arena_extend_strategy(ArenaExtendStrategy.kSameAsRequested)
@@ -135,7 +135,7 @@ def create_ort_trainer(args, device, model):
         world_rank=args.distributed_rank, world_size=args.distributed_world_size,
         use_mixed_precision = True if args.fp16 else False,
         allreduce_post_accumulation = True, #if args.allreduce_post_accumulation else False,
-        partition_optimizer = False, #if args.partition_optimizer else False,
+        #partition_optimizer = False, #if args.partition_optimizer else False,
         _opset_version = 12)
 
     if args.fp16:
@@ -220,10 +220,10 @@ def ort_eval_step(args, update_num, model, sample):
     target = sample['target']
     target = target.view(-1)
 
-    print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
-    print('ORT_TRAIN_STEP: src_lengths size: {}'.format(src_lengths.size()))
-    print('ORT_TRAIN_STEP: prev_output_tokens size: {}'.format(prev_output_tokens.size()))
-    print('ORT_TRAIN_STEP: target size: {}'.format(target.size()))
+    print('ORT_EVAL_STEP: src_tokens size: {}'.format(src_tokens.size()))
+    print('ORT_EVAL_STEP: src_lengths size: {}'.format(src_lengths.size()))
+    print('ORT_EVAL_STEP: prev_output_tokens size: {}'.format(prev_output_tokens.size()))
+    print('ORT_EVAL_STEP: target size: {}'.format(target.size()))
 
     lr = get_lr(args, update_num)
     learning_rate = torch.tensor([lr])

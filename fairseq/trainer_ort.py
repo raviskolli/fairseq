@@ -402,13 +402,14 @@ class ORTTrainer(object):
         for i, sample in enumerate(samples):
             #sample = self._prepare_sample(sample)
 
-            net_input = sample['net_input']
-            src_tokens = net_input['src_tokens']
-            #print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
-            src_lengths = net_input['src_lengths']
-            if (src_lengths.size(0) != 3):
-                print('src_lengths incorrect size', src_lengths.size(0))
-                sample = None
+            if sample is not None:
+                net_input = sample['net_input']
+                src_tokens = net_input['src_tokens']
+                #print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
+                src_lengths = net_input['src_lengths']
+                if (src_lengths.size(0) != 3):
+                    print('src_lengths incorrect size', src_lengths.size(0))
+                    sample = None
 
             if sample is None:
                 # when sample is None, run forward/backward on a dummy batch
