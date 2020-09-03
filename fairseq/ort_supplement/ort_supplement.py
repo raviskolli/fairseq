@@ -42,11 +42,12 @@ def setup_onnxruntime_with_mpi(args):
         torch.distributed.init_process_group(backend='nccl')
     '''
 
-    #torch.cuda.set_device(args.distributed_rank)
-    device = torch.device("cuda", get_local_rank)
+    #device = torch.device("cuda", get_local_rank())
+    device = torch.device("cuda", args.distributed_rank)
 
     from onnxruntime.capi._pybind_state import set_cuda_device_id 
-    set_cuda_device_id(get_local_rank)
+    #set_cuda_device_id(get_local_rank())
+    set_cuda_device_id(args.distributed_rank)
 
     from onnxruntime.capi._pybind_state import set_arena_extend_strategy, ArenaExtendStrategy
     set_arena_extend_strategy(ArenaExtendStrategy.kSameAsRequested)
@@ -58,19 +59,20 @@ def bart_model_description(args):
     batch = 3
     max_tokens_valid = 1023
     max_tokens = 3069
-    '''
+    #'''
     # allow variable input sizes:
-    src_tokens_desc = IODescription('src_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
+    src_tokens_desc = IODescription('src_tokens', ['batch', 'max_src_tokens'], torch.int64, num_classes = vocab_size)
     src_lengths_desc = IODescription('src_lengths', ['batch'], torch.int64, num_classes = args.max_tokens_valid)
-    prev_output_tokens_desc = IODescription('prev_output_tokens', ['batch', 'max_tokens_valid'], torch.int64, num_classes = vocab_size)
-    target_desc = IODescription('target', ['max_tokens'], torch.int64, num_classes = vocab_size)
+    prev_output_tokens_desc = IODescription('prev_output_tokens', ['batch', 'max_out_tokens'], torch.int64, num_classes = vocab_size)
+    target_desc = IODescription('target', ['max_tgt_tokens'], torch.int64, num_classes = vocab_size)
+    #'''
     '''
     # set concrete input sizes to permit optimization
     src_tokens_desc = IODescription('src_tokens', [batch, max_tokens_valid], torch.int64, num_classes = vocab_size)
     src_lengths_desc = IODescription('src_lengths', [batch], torch.int64, num_classes = args.max_tokens_valid)
     prev_output_tokens_desc = IODescription('prev_output_tokens', [batch, max_tokens_valid], torch.int64, num_classes = vocab_size)
     target_desc = IODescription('target', [max_tokens], torch.int64, num_classes = vocab_size)
-
+    '''
     loss_desc = IODescription('loss', [], torch.float32)
     #return ModelDescription([src_tokens_desc, src_lengths_desc, prev_output_tokens_desc, target_desc], [loss_desc])
     return ModelDescription([src_tokens_desc, prev_output_tokens_desc, target_desc], [loss_desc])
@@ -125,6 +127,7 @@ def create_ort_trainer(args, device, model):
                     "weight_decay_mode" : 0,
                     "do_bias_correction" : 1}
 
+    #print('Creating ORTTrainer')
     # we request ORTTrainer to create a LambOptimizer with given optimizer_attributes. 
     # train_step does forward, backward, and optimize step.
     model = ORTTrainer(model, None, bart_model_description(args), "AdamOptimizer", 
@@ -137,7 +140,7 @@ def create_ort_trainer(args, device, model):
         allreduce_post_accumulation = True, #if args.allreduce_post_accumulation else False,
         #partition_optimizer = False, #if args.partition_optimizer else False,
         _opset_version = 12)
-
+    #print('Created ORTTrainer')
     if args.fp16:
         setattr(args, 'ort_loss_scale', LossScaler(model.loss_scale_input_name, True, up_scale_window=2000))
 
@@ -176,7 +179,13 @@ def ort_train_step(args, update_num, model, sample):
     print('ORT_TRAIN_STEP: src_lengths size: {}'.format(src_lengths.size()))
     print('ORT_TRAIN_STEP: prev_output_tokens size: {}'.format(prev_output_tokens.size()))
     print('ORT_TRAIN_STEP: target size: {}'.format(target.size()))
+
+    tgt_num_ones = (target == 1.).sum(dim=0)
+    print('ORT_TRAIN_STEP: tgt size: ', target.size())
+    print('ORT_TRAIN_STEP: tgt: ', target)
+    print('ORT_TRAIN_STEP: tgt_ones: ', tgt_num_ones)
     '''
+
     lr = get_lr(args, update_num)
     learning_rate = torch.tensor([lr])
     if args.fp16:
@@ -186,6 +195,7 @@ def ort_train_step(args, update_num, model, sample):
         all_finite = 1
         update_loss_scale = False
         if isinstance(loss, (list, tuple)):
+            #print('ORT_TRAINER: updating loss scale at step: ', update_num)
             assert len(loss) == 2
             update_loss_scale = True
             loss, all_finite = loss
