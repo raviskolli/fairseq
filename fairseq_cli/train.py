@@ -46,10 +46,13 @@ def main(args):
     ), "Must specify batch size either with --max-tokens or --max-sentences"
     metrics.reset()
 
+    '''
     # Initialize CUDA and distributed training
     if torch.cuda.is_available() and not args.cpu and not getattr(args, 'tpu', False):
         print('Train: setting cuda device id: {}'.format(args.device_id))
         torch.cuda.set_device(args.device_id)
+    '''
+    
     np.random.seed(args.seed)
     utils.set_torch_seed(args.seed)
     #if init_distributed:
@@ -223,7 +226,7 @@ def train(args, trainer, task, epoch_itr):
             net_input = sample['net_input']
             src_tokens = net_input['src_tokens']
             print(str(i)+'\t'+str(list(src_tokens.size())[0])+'\t'+str(list(src_tokens.size())[1]))
-        continue
+        #continue
         '''
         with metrics.aggregate("train_inner"), torch.autograd.profiler.record_function("train_step-%d" % i):
             log_output = trainer.train_step(samples)
