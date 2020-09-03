@@ -50,6 +50,7 @@ class bart_model_with_loss(torch.nn.Module):
         #print('ORT Trainer net_out size: {}'.format(net_out.size()))
         lprobs = self.model_.get_normalized_probs(net_out, log_probs=True)
         #lprobs = lprobs.view(-1, lprobs.size(-1))
+        #print('TRAINER_ORT: lprobs size: ', lprobs.size())
         loss = self.loss_fn_(lprobs, target)
         #print('ORT Trainer loss value: {}'.format(loss))
         return loss
@@ -394,23 +395,31 @@ class ORTTrainer(object):
         #self.criterion.train()
         #self.zero_grad()
         #print(len(samples))
-
+        #print('In ORT Train Step')
         metrics.log_start_time("train_wall", priority=800, round=0)
 
         # forward and backward pass
         logging_outputs, sample_size, ooms = [], 0, 0
         for i, sample in enumerate(samples):
-            #sample = self._prepare_sample(sample)
+            sample = self._prepare_sample(sample)
 
             if sample is not None:
+                #print ('Token Ids: ', sample['id'])
+                '''
                 net_input = sample['net_input']
                 src_tokens = net_input['src_tokens']
-                #print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
+                print('ORT_TRAIN_STEP: src_tokens size: {}'.format(src_tokens.size()))
                 src_lengths = net_input['src_lengths']
+                prev_output_tokens = net_input['prev_output_tokens']
+                target = sample['target']
+                target = target.view(-1)
+                print('ORT_TRAIN_STEP: src_lengths size: {}'.format(src_lengths.size()))
+                print('ORT_TRAIN_STEP: prev_output_tokens size: {}'.format(prev_output_tokens.size()))
+                print('ORT_TRAIN_STEP: target size: {}'.format(target.size()))
                 if (src_lengths.size(0) != 3):
                     print('src_lengths incorrect size', src_lengths.size(0))
                     sample = None
-
+                '''
             if sample is None:
                 # when sample is None, run forward/backward on a dummy batch
                 # and ignore the resulting gradients

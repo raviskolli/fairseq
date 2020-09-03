@@ -32,16 +32,16 @@ def infer_language_pair(path):
 
 def collate_tokens(values, pad_idx, eos_idx=None, left_pad=False, move_eos_to_beginning=False, pad_to_length=None):
     """Convert a list of 1d tensors into a padded 2d tensor."""
-    size = max(v.size(0) for v in values)
-    size = size if pad_to_length is None else max(size, pad_to_length)
-    size = 1023
-    res = values[0].new(len(values), size).fill_(pad_idx)
     '''
     v0 = values[0]
     for v in values:
         print('Denoising Dataset collate tokens size: {}'.format(v.size()))
-        print('Denoising Dataset collate tensor same: {}'.format(torch.equal(v0, v)))
+        #print('Denoising Dataset collate tensor same: {}'.format(torch.equal(v0, v)))
     '''
+    size = max(v.size(0) for v in values)
+    size = size if pad_to_length is None else max(size, pad_to_length)
+    #size = 1023
+    res = values[0].new(len(values), size).fill_(pad_idx)
     def copy_tensor(src, dst):
         assert dst.numel() == src.numel()
         if move_eos_to_beginning:
@@ -55,6 +55,7 @@ def collate_tokens(values, pad_idx, eos_idx=None, left_pad=False, move_eos_to_be
             dst.copy_(src)
 
     for i, v in enumerate(values):
+        #print('Dataset pad size: ', size - len(v))
         copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
     return res
 
