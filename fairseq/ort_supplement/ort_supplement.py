@@ -42,12 +42,12 @@ def setup_onnxruntime_with_mpi(args):
         torch.distributed.init_process_group(backend='nccl')
     '''
 
-    device = torch.device("cuda", get_local_rank())
-    #device = torch.device("cuda", args.distributed_rank)
+    #device = torch.device("cuda", get_local_rank())
+    device = torch.device("cuda", args.distributed_rank)
 
     from onnxruntime.capi._pybind_state import set_cuda_device_id 
-    set_cuda_device_id(get_local_rank())
-    #set_cuda_device_id(args.distributed_rank)
+    #set_cuda_device_id(get_local_rank())
+    set_cuda_device_id(args.distributed_rank)
 
     from onnxruntime.capi._pybind_state import set_arena_extend_strategy, ArenaExtendStrategy
     set_arena_extend_strategy(ArenaExtendStrategy.kSameAsRequested)

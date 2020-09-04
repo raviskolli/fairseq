@@ -181,7 +181,7 @@ def setup_azureml_training(args):
 
 
 def call_main(args, main, **kwargs):
-    args = setup_azureml_training(args)
+    #args = setup_azureml_training(args)
     if args.distributed_init_method is None:
         infer_init_method(args)
 

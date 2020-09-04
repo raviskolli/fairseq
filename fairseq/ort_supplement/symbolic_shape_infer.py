@@ -1254,10 +1254,10 @@ class SymbolicShapeInference:
                 output.CopyFrom(self.known_vi_[output.name])
 
     @staticmethod
-    def infer_shapes(input_model, int_max=2**31 - 1, auto_merge=False, guess_output_rank=False, verbose=0):
-    #def infer_shapes(input_model, output_model, int_max=2**31 - 1, auto_merge=False, guess_output_rank=False, verbose=0):
-        #in_mp = onnx.load(input_model)
-        in_mp = input_model
+    #def infer_shapes(input_model, int_max=2**31 - 1, auto_merge=False, guess_output_rank=False, verbose=0):
+    def infer_shapes(input_model, output_model, int_max=2**31 - 1, auto_merge=False, guess_output_rank=False, verbose=0):
+        in_mp = onnx.load(input_model)
+        #in_mp = input_model
         onnx_opset = get_opset(in_mp)
         if not onnx_opset or onnx_opset < 7:
             print('Only support models of onnx opset 7 and above.')
@@ -1268,8 +1268,8 @@ class SymbolicShapeInference:
         while symbolic_shape_inference.run_:
             all_shapes_inferred = symbolic_shape_inference._infer_impl(in_mp)
         symbolic_shape_inference._update_output_from_vi()
-        #if output_model:
-            #onnx.save(symbolic_shape_inference.out_mp_, output_model)
+        if output_model:
+            onnx.save(symbolic_shape_inference.out_mp_, output_model)
         if not all_shapes_inferred:
             sys.exit(1)
         return symbolic_shape_inference.out_mp_
