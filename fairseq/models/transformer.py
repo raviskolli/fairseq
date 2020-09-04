@@ -829,7 +829,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         return min(self.max_target_positions, self.embed_positions.max_positions)
 
     def buffered_future_mask(self, tensor):
-        dim = tensor.size(0)
+        dim_dyn = tensor.size(0)
+        dim = self.max_target_positions
         # self._future_mask.device != tensor.device is not working in TorchScript. This is a workaround.
         if (
             self._future_mask.size(0) == 0
@@ -840,7 +841,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 utils.fill_with_neg_inf(torch.zeros([dim, dim])), 1
             )
         self._future_mask = self._future_mask.to(tensor)
-        return self._future_mask[:dim, :dim]
+        return self._future_mask[:dim_dyn, :dim_dyn]
 
     def upgrade_state_dict_named(self, state_dict, name):
         """Upgrade a (possibly old) state dict for new versions of fairseq."""
